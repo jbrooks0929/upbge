@@ -30,7 +30,7 @@ float hashed_alpha_threshold(vec3 co)
 {
   /* Find the discretized derivatives of our coordinates. */
   float max_deriv = max(length(dFdx(co)), length(dFdy(co)));
-  float pix_scale = 1.0 / (alphaHashScale * max_deriv);
+  float pix_scale = 1.0 / (0.25 * max_deriv);
 
   /* Find two nearest log-discretized noise scales. */
   float pix_scale_log = log2(pix_scale);
@@ -47,20 +47,18 @@ float hashed_alpha_threshold(vec3 co)
   float fac = fract(log2(pix_scale));
 
   /* Interpolate alpha threshold from noise at two scales. */
-  float x = mix(alpha.x, alpha.y, fac);
-
+  float x = (1-fac)*alpha.x+fac*alpha.y;
+  float a  = min(fac, 1 - fac);
   /* Pass into CDF to compute uniformly distrib threshold. */
-  float a = min(fac, 1.0 - fac);
-  float one_a = 1.0 - a;
-  float denom = 1.0 / (2 * a * one_a);
-  float one_x = (1 - x);
-  vec3 cases = vec3((x * x) * denom, (x - 0.5 * a) / one_a, 1.0 - (one_x * one_x * denom));
+  vec3 cases = vec3(x*x/(2*a*(1-a)),
+                   (x-0.5*a)/(1-a),
+                   1.0-((1-x)*(1-x)/(2*a*(1-a))));
 
   /* Find our final, uniformly distributed alpha threshold. */
-  float threshold = (x < one_a) ? ((x < a) ? cases.x : cases.y) : cases.z;
+  float threshold = (x < 1-a) ? ((x < a) ? cases.x : cases.y) : cases.z;
 
   /* Jitter the threshold for TAA accumulation. */
-  threshold = fract(threshold + alphaHashOffset);
+  //threshold = fract(threshold + alphaHashOffset);
 
   /* Avoids threshold == 0. */
   threshold = clamp(threshold, 1.0e-6, 1.0);
@@ -79,7 +77,7 @@ void main()
   float opacity = saturate(1.0 - avg(cl.transmittance));
 
   /* Hashed Alpha Testing */
-  if (opacity < hashed_alpha_threshold(worldPosition)) {
+  if (opacity < hashed_alpha_threshold(transform_point(ModelMatrixInverse, worldPosition))) {
     discard;
   }
 #endif
