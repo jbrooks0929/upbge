@@ -2240,7 +2240,7 @@ PyObject *KX_GameObject::PyReplaceMesh(PyObject *args, PyObject *kwds)
 
 PyObject *KX_GameObject::PyEndObject()
 {
-  GetScene()->DelayedRemoveObject(this);
+  GetScene()->DelayedRemoveObject(this, true);
 
   Py_RETURN_NONE;
 }

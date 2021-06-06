@@ -38,6 +38,7 @@
 
 #include "BKE_lib_id.h"
 #include "BKE_lib_remap.h"
+#include "BKE_armature.h"
 #include "BKE_mball.h"
 #include "BKE_modifier.h"
 #include "BKE_object.h"
@@ -65,6 +66,7 @@
 #include "EXP_FloatValue.h"
 #include "KX_2DFilterManager.h"
 #include "KX_BlenderCanvas.h"
+#include "KX_BoneParentNodeRelationship.h"
 #include "KX_Camera.h"
 #include "KX_CollisionEventManager.h"
 #include "KX_FontObject.h"
@@ -577,7 +579,7 @@ void KX_Scene::RemoveOverlayCollection(Collection *collection)
           bContext *C = KX_GetActiveEngine()->GetContext();
           Main *bmain = CTX_data_main(C);
           BKE_collection_object_remove(bmain, collection, gameobj->GetBlenderObject(), false);
-          DelayedRemoveObject(gameobj);
+          DelayedRemoveObject(gameobj, true);
         }
       }
     }
@@ -1832,10 +1834,11 @@ void KX_Scene::DupliGroupRecurse(KX_GameObject *groupobj, int level)
     MT_Vector3 offset(group->instance_offset);
     MT_Vector3 newpos = groupobj->NodeGetWorldPosition() +
                         newscale * (groupobj->NodeGetWorldOrientation() *
-                                    (gameobj->NodeGetWorldPosition() - offset));
+                                      (gameobj->NodeGetWorldPosition() - offset));
     replica->NodeSetLocalPosition(newpos);
     // set the orientation after position for softbody!
-    MT_Matrix3x3 newori = groupobj->NodeGetWorldOrientation() * gameobj->NodeGetWorldOrientation();
+    MT_Matrix3x3 newori = groupobj->NodeGetWorldOrientation() *
+                          gameobj->NodeGetWorldOrientation();
     replica->NodeSetLocalOrientation(newori);
     // update scenegraph for entire tree of children
     replica->GetSGNode()->UpdateWorldData(0);
@@ -1881,11 +1884,46 @@ void KX_Scene::DupliGroupRecurse(KX_GameObject *groupobj, int level)
       // groupobj holds a list of all objects, that belongs to this group
       groupobj->AddInstanceObjects(gameobj);
 
-      /* If the groupobj itself is parented, parent the top parent instance spawned to invisibled groupobj
+      /* If the groupobj itself is parented, parent the top parent instance spawned to groupobj parent
        * to have the same behaviour than in viewport.
        */
-      if (groupobj->GetParent()) {
-        gameobj->SetParent(groupobj, false, false);
+      if (groupobj->GetParent() && (groupobj->GetLayer() & groupobj->GetScene()->GetBlenderScene()->lay)) {
+        switch (groupobj->GetBlenderObject()->partype) {
+          case PARVERT1: {
+            // creat a new vertex parent relationship for this node.
+            KX_VertexParentRelation *vertex_parent_relation = new KX_VertexParentRelation();
+            gameobj->GetSGNode()->SetParentRelation(vertex_parent_relation);
+            break;
+          }
+          case PARSLOW: {
+            // creat a new slow parent relationship for this node.
+            KX_SlowParentRelation *slow_parent_relation = new KX_SlowParentRelation(
+                gameobj->GetBlenderObject()->sf);
+            gameobj->GetSGNode()->SetParentRelation(slow_parent_relation);
+            break;
+          }
+          case PARBONE: {
+            // parent this to a bone
+            Bone *parent_bone = BKE_armature_find_bone_name(
+                BKE_armature_from_object(groupobj->GetBlenderObject()->parent), groupobj->GetBlenderObject()->parsubstr);
+
+            if (parent_bone) {
+              KX_BoneParentRelation *bone_parent_relation = new KX_BoneParentRelation(parent_bone);
+              gameobj->GetSGNode()->SetParentRelation(bone_parent_relation);
+            }
+
+            break;
+          }
+          case PARSKEL:  // skinned - ignore
+            break;
+          case PAROBJECT:
+          case PARVERT3:
+          default:
+            // unhandled
+            break;
+        }
+
+        groupobj->GetParent()->GetSGNode()->AddChild(gameobj->GetSGNode());
       }
 
       // every object gets the reference to its dupli-group object
@@ -2015,14 +2053,16 @@ void KX_Scene::RemoveDupliGroup(KX_GameObject *gameobj)
 {
   if (gameobj->IsDupliGroup()) {
     for (KX_GameObject *instance : gameobj->GetInstanceObjects()) {
-      DelayedRemoveObject(instance);
+      DelayedRemoveObject(instance, true);
     }
   }
 }
 
-void KX_Scene::DelayedRemoveObject(KX_GameObject *gameobj)
+void KX_Scene::DelayedRemoveObject(KX_GameObject *gameobj, bool remove_dupli_instances)
 {
-  RemoveDupliGroup(gameobj);
+  if (remove_dupli_instances) {
+    RemoveDupliGroup(gameobj);
+  }
 
   CM_ListAddIfNotFound(m_euthanasyobjects, gameobj);
 }
@@ -2281,7 +2321,7 @@ void KX_Scene::LogicBeginFrame(double curtime, double framestep)
       }
       else {
         // remove obj, remove the object from tempObjectList in NewRemoveObject only.
-        DelayedRemoveObject(gameobj);
+        DelayedRemoveObject(gameobj, true);
       }
     }
     else {

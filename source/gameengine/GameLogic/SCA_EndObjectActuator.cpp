@@ -60,7 +60,7 @@ bool SCA_EndObjectActuator::Update()
 
   if (bNegativeEvent)
     return false;  // do nothing on negative events
-  m_scene->DelayedRemoveObject(static_cast<KX_GameObject *>(GetParent()));
+  m_scene->DelayedRemoveObject(static_cast<KX_GameObject *>(GetParent()), true);
 
   return false;
 }

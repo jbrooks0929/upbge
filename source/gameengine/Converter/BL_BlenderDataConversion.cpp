@@ -1212,7 +1212,8 @@ void BL_ConvertBlenderObjects(struct Main *maggie,
       /* macro calls object conversion funcs */
       BL_CONVERTBLENDEROBJECT_SINGLE;
 
-      if (gameobj->IsDupliGroup() && !single_object) { // Don't bother with groups during single object conversion
+      if (gameobj->IsDupliGroup() &&
+          !single_object) {  // Don't bother with groups during single object conversion
         grouplist.insert(blenderobject->instance_collection);
       }
 
@@ -1228,7 +1229,7 @@ void BL_ConvertBlenderObjects(struct Main *maggie,
     }
   }
 
-  if (!grouplist.empty()) { // always empty during single object conversion
+  if (!grouplist.empty()) {  // always empty during single object conversion
     // now convert the group referenced by dupli group object
     // keep track of all groups already converted
     std::set<Collection *> allgrouplist = grouplist;
@@ -1243,12 +1244,8 @@ void BL_ConvertBlenderObjects(struct Main *maggie,
         FOREACH_COLLECTION_OBJECT_RECURSIVE_BEGIN (group, blenderobject) {
           if (converter->FindGameObject(blenderobject) == nullptr) {
             groupobj.insert(blenderobject);
-            KX_GameObject *gameobj = BL_gameobject_from_blenderobject(blenderobject,
-                                                                      kxscene,
-                                                                      rendertools,
-                                                                      converter,
-                                                                      libloading,
-                                                                      false);
+            KX_GameObject *gameobj = BL_gameobject_from_blenderobject(
+                blenderobject, kxscene, rendertools, converter, libloading, false);
 
             bool isInActiveLayer = false;
             if (gameobj) {
@@ -1635,6 +1632,14 @@ void BL_ConvertBlenderObjects(struct Main *maggie,
       if (!single_object) {
         kxscene->DupliGroupRecurse(gameobj, 0);
       }
+    }
+  }
+
+  /* Remove groupobj from active list (only keep the one in inactive list) */
+  for (unsigned int i = 0; i < objcount; ++i) {
+    KX_GameObject *gameobj = objectlist->GetValue(i);
+    if (gameobj->IsDupliGroup()) {
+      kxscene->DelayedRemoveObject(gameobj, false);
     }
   }
 }
