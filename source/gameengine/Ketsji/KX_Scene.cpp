@@ -1750,6 +1750,11 @@ void KX_Scene::ReplicateLogic(KX_GameObject *newobj)
   newobj->ResetState();
 }
 
+struct BL_parentChildLink {
+  struct Object *m_blenderchild;
+  SG_Node *m_gamechildnode;
+};
+
 void KX_Scene::DupliGroupRecurse(KX_GameObject *groupobj, int level)
 {
   Object *blgroupobj = groupobj->GetBlenderObject();
@@ -1888,18 +1893,63 @@ void KX_Scene::DupliGroupRecurse(KX_GameObject *groupobj, int level)
        * to have the same behaviour than in viewport.
        */
       if (groupobj->GetParent() && (groupobj->GetLayer() & groupobj->GetScene()->GetBlenderScene()->lay)) {
+
+          SG_Callbacks callback(nullptr,
+                              nullptr,
+                              nullptr,
+                              KX_Scene::KX_ScenegraphUpdateFunc,
+                              KX_Scene::KX_ScenegraphRescheduleFunc);
+        SG_Node *parentinversenode = new SG_Node(nullptr, this, callback);
+
+        // Define a normal parent relationship for this node.
+        KX_NormalParentRelation *parent_relation = new KX_NormalParentRelation();
+        parentinversenode->SetParentRelation(parent_relation);
+
+        BL_parentChildLink pclink;
+        pclink.m_blenderchild = gameobj->GetBlenderObject();
+        pclink.m_gamechildnode = parentinversenode;
+
+        float *fl = (float *)groupobj->GetBlenderObject()->parentinv;
+        MT_Transform parinvtrans(fl);
+        parentinversenode->SetLocalPosition(parinvtrans.getOrigin());
+        // problem here: the parent inverse transform combines scaling and rotation
+        // in the basis but the scenegraph needs separate rotation and scaling.
+        // This is not important for OpenGL (it uses 4x4 matrix) but it is important
+        // for the physic engine that needs a separate scaling
+        // parentinversenode->SetLocalOrientation(parinvtrans.getBasis());
+
+        // Extract the rotation and the scaling from the basis
+        MT_Matrix3x3 ori(parinvtrans.getBasis());
+        MT_Vector3 x(ori.getColumn(0));
+        MT_Vector3 y(ori.getColumn(1));
+        MT_Vector3 z(ori.getColumn(2));
+        MT_Vector3 parscale(x.length(), y.length(), z.length());
+        if (!MT_fuzzyZero(parscale[0]))
+          x /= parscale[0];
+        if (!MT_fuzzyZero(parscale[1]))
+          y /= parscale[1];
+        if (!MT_fuzzyZero(parscale[2]))
+          z /= parscale[2];
+        ori.setColumn(0, x);
+        ori.setColumn(1, y);
+        ori.setColumn(2, z);
+        parentinversenode->SetLocalOrientation(ori);
+        parentinversenode->SetLocalScale(parscale);
+
+        parentinversenode->AddChild(gameobj->GetSGNode());
+
         switch (groupobj->GetBlenderObject()->partype) {
           case PARVERT1: {
             // creat a new vertex parent relationship for this node.
             KX_VertexParentRelation *vertex_parent_relation = new KX_VertexParentRelation();
-            gameobj->GetSGNode()->SetParentRelation(vertex_parent_relation);
+            pclink.m_gamechildnode->SetParentRelation(vertex_parent_relation);
             break;
           }
           case PARSLOW: {
             // creat a new slow parent relationship for this node.
             KX_SlowParentRelation *slow_parent_relation = new KX_SlowParentRelation(
                 gameobj->GetBlenderObject()->sf);
-            gameobj->GetSGNode()->SetParentRelation(slow_parent_relation);
+            pclink.m_gamechildnode->SetParentRelation(slow_parent_relation);
             break;
           }
           case PARBONE: {
@@ -1909,7 +1959,7 @@ void KX_Scene::DupliGroupRecurse(KX_GameObject *groupobj, int level)
 
             if (parent_bone) {
               KX_BoneParentRelation *bone_parent_relation = new KX_BoneParentRelation(parent_bone);
-              gameobj->GetSGNode()->SetParentRelation(bone_parent_relation);
+              pclink.m_gamechildnode->SetParentRelation(bone_parent_relation);
             }
 
             break;
@@ -1923,7 +1973,7 @@ void KX_Scene::DupliGroupRecurse(KX_GameObject *groupobj, int level)
             break;
         }
 
-        groupobj->GetParent()->GetSGNode()->AddChild(gameobj->GetSGNode());
+        groupobj->GetParent()->GetSGNode()->AddChild(pclink.m_gamechildnode);
       }
 
       // every object gets the reference to its dupli-group object
