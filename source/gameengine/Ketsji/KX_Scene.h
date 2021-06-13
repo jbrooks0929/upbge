@@ -57,6 +57,7 @@ struct Scene;
 
 template<class T> class EXP_ListValue;
 
+class BL_ArmatureObject;
 class EXP_Value;
 class SCA_LogicManager;
 class SCA_KeyboardManager;
@@ -157,6 +158,8 @@ class KX_Scene : public EXP_Value, public SCA_IScene {
   std::vector<std::pair<Mesh *, IDRecalcFlag>> m_meshesToUpdateInAllRenderPasses;
   std::vector<std::pair<Object *, IDRecalcFlag>> m_extraObjectsToUpdateInOverlayPass;
   std::vector<bNodeTree *> m_nodeTreesToUpdateInAllRenderPasses;
+
+  std::vector<std::pair<BL_ArmatureObject *, Object *>> m_arm_meshToUpdate;
   /*************************************************/
 
   RAS_BucketManager *m_bucketmanager;
@@ -387,6 +390,8 @@ class KX_Scene : public EXP_Value, public SCA_IScene {
   void AppendToExtraObjectsToUpdateInOverlayPass(Object *ob, IDRecalcFlag flag);
   void TagForExtraObjectsUpdate(Main *bmain, KX_Camera *cam);
   KX_GameObject *AddDuplicaObject(KX_GameObject *gameobj, KX_GameObject *reference, float lifespan);
+
+  void AppendToArmMeshToUpdate(BL_ArmatureObject *armature, Object *mesh);
   /***************End of EEVEE INTEGRATION**********************/
 
   RAS_BucketManager *GetBucketManager() const;

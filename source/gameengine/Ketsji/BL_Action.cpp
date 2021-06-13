@@ -363,6 +363,19 @@ static bool ActionMatchesName(bAction *action, char *name, eActionType type)
   return false;
 }
 
+static Object *ArmaChild(KX_Scene *scene, Object *arm)
+{
+  Object *ob = nullptr;
+  for (KX_GameObject *gameobj : scene->GetObjectList()) {
+    ob = gameobj->GetBlenderObject();
+    if (ob && ob->parent == arm) {
+      return ob;
+    }
+  }
+
+  return nullptr;
+}
+
 void BL_Action::Update(float curtime, bool applyToObject)
 {
   /* Don't bother if we're done with the animation and if the animation was already applied to the
@@ -434,6 +447,7 @@ void BL_Action::Update(float curtime, bool applyToObject)
                                                                                m_localframe);
 
   if (m_obj->GetGameObjectType() == SCA_IObject::OBJ_ARMATURE) {
+
     if (ob->gameflag & OB_OVERLAY_COLLECTION) {
       scene->AppendToExtraObjectsToUpdateInOverlayPass(ob, ID_RECALC_TRANSFORM);
     }
@@ -441,7 +455,10 @@ void BL_Action::Update(float curtime, bool applyToObject)
       scene->AppendToExtraObjectsToUpdateInAllRenderPasses(ob, ID_RECALC_TRANSFORM);
     }
 
+
     BL_ArmatureObject *obj = (BL_ArmatureObject *)m_obj;
+
+    scene->AppendToArmMeshToUpdate(obj, ArmaChild(scene, ob));
 
     if (m_layer_weight >= 0)
       obj->GetPose(&m_blendpose);

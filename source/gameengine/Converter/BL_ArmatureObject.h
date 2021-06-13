@@ -68,6 +68,9 @@ class BL_ArmatureObject : public KX_GameObject {
 
   double m_lastapplyframe;
 
+  std::vector<std::array<float, 3>> m_transverts;
+  std::vector<std::array<float, 3>> m_transnors;
+
  public:
   BL_ArmatureObject(void *sgReplicationInfo,
                     SG_Callbacks callbacks,
@@ -93,14 +96,10 @@ class BL_ArmatureObject : public KX_GameObject {
 
   bool UpdateTimestep(double curtime);
 
+  void VerifyStorage(Mesh *me);
+
   void armature_deform_verts(Object *armOb,
-                             Object *target,
-                             DerivedMesh *dm,
-                             float (*vertexCos)[3],
-                             float (*defMats)[3][3],
-                             int numVerts,
-                             float (*prevCos)[3],
-                             const char *defgrp_name);
+                             Object *target);
 
   Object *GetArmatureObject();
   Object *GetOrigArmatureObject();

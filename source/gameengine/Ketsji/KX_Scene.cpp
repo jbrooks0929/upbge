@@ -42,6 +42,7 @@
 #include "BKE_modifier.h"
 #include "BKE_object.h"
 #include "BKE_screen.h"
+#include "BL_ArmatureObject.h"
 #include "BLI_task.h"
 #include "BLI_threads.h"
 #include "DEG_depsgraph_query.h"
@@ -264,6 +265,8 @@ KX_Scene::KX_Scene(SCA_IInputDevice *inputDevice,
   m_backupObList = {};
   m_potentialChildren = {};
 
+  m_arm_meshToUpdate = {};
+
   /* Configure Shading types and overlays according to
    * (viewport render or not) and (blenderplayer or not)
    */
@@ -289,6 +292,9 @@ KX_Scene::KX_Scene(SCA_IInputDevice *inputDevice,
 
   /* Fix black shading issue with addObject https://github.com/UPBGE/upbge/issues/1354 */
   GPU_shader_force_unbind();
+
+
+  BKE_scene_graph_update_tagged(CTX_data_depsgraph_pointer(C), bmain);
   /****************************************************/
 }
 
@@ -687,6 +693,8 @@ void KX_Scene::RenderAfterCameraSetup(KX_Camera *cam,
 
   engine->CountDepsgraphTime();
 
+#if 0
+
   if (m_collectionRemap) {
     BKE_main_collection_sync_remap(bmain);
     m_collectionRemap = false;
@@ -710,12 +718,32 @@ void KX_Scene::RenderAfterCameraSetup(KX_Camera *cam,
   /* We need the changes to be flushed before each draw loop! */
   BKE_scene_graph_update_tagged(depsgraph, bmain);
 
+
   UpdateParents(0.0);
+#endif
+
+  //TagForExtraObjectsUpdate(bmain, cam);
+
+  BKE_scene_graph_update_tagged(depsgraph, bmain);
+
+  
 
   /* Update evaluated object obmat according to SceneGraph. */
   for (KX_GameObject *gameobj : GetObjectList()) {
     gameobj->TagForTransformUpdateEvaluated();
   }
+
+  for (std::vector<std::pair<BL_ArmatureObject *, Object *>>::iterator it =
+           m_arm_meshToUpdate.begin();
+       it != m_arm_meshToUpdate.end();
+       it++) {
+    BL_ArmatureObject *arm = it->first;
+    Object *obmesh = it->second;
+    Object *obmesh_eval = (Object *)DEG_get_evaluated_id(depsgraph, &obmesh->id);
+    arm->armature_deform_verts(arm->GetBlenderObject(), obmesh_eval);
+  }
+  m_arm_meshToUpdate.clear();
+
 
   engine->EndCountDepsgraphTime();
 
@@ -1418,6 +1446,11 @@ KX_GameObject *KX_Scene::AddDuplicaObject(KX_GameObject *gameobj, KX_GameObject 
     }
   }
   return nullptr;
+}
+
+void KX_Scene::AppendToArmMeshToUpdate(BL_ArmatureObject *arm, Object *child)
+{
+  m_arm_meshToUpdate.push_back({arm, child});
 }
 
 /******************End of EEVEE INTEGRATION****************************/

@@ -207,6 +207,9 @@ BL_ArmatureObject::BL_ArmatureObject(void *sgReplicationInfo,
   m_controlledConstraints = new EXP_ListValue<BL_ArmatureConstraint>();
   m_poseChannels = new EXP_ListValue<BL_ArmatureChannel>();
 
+  m_transverts = {};
+  m_transnors = {};
+
   // Keep a copy of the original armature so we can fix drivers later
   m_origObjArma = armature;
   m_objArma = m_origObjArma;  // BKE_object_copy(bmain, armature);
@@ -499,20 +502,41 @@ static short get_deformflags(Object *bmeshobj)
   return flags;
 }
 
+void BL_ArmatureObject::VerifyStorage(Mesh *mesh)
+{
+  /* Ensure that we have the right number of verts assigned */
+  const unsigned int totvert = mesh->totvert;
+  if (m_transverts.size() != totvert) {
+    m_transverts.resize(totvert);
+    m_transnors.resize(totvert);
+  }
+
+  for (unsigned int v = 0; v < totvert; ++v) {
+    copy_v3_v3(m_transverts[v].data(), mesh->mvert[v].co);
+    normal_short_to_float_v3(m_transnors[v].data(), mesh->mvert[v].no);
+  }
+}
+
 void BL_ArmatureObject::armature_deform_verts(Object *armOb,
-                           Object *target,
-                           DerivedMesh *dm,
-                           float (*vertexCos)[3],
-                           float (*defMats)[3][3],
-                           int numVerts,
-                           float (*prevCos)[3],
-                           const char *defgrp_name)
+                           Object *target)
 {
   float obmat[4][4];  // the original object matrix
     // save matrix first
   copy_m4_m4(obmat, target->obmat);
   // set reference matrix (ref armature obmat)
   copy_m4_m4(target->obmat, m_obmat);
+
+  Mesh *tarmesh = (Mesh *)target->data;
+  int numVerts = tarmesh->totvert;
+  DerivedMesh *dm = nullptr;
+  //float(*vertexCos)[3] = nullptr;
+  float(*defMats)[3][3] = nullptr;
+  float(*prevCos)[3] = nullptr;
+  const char *defgrp_name = nullptr;
+
+  VerifyStorage(tarmesh);
+
+  float(*vertexCos)[3] = (float(*)[3]) m_transverts.data();
 
   bPoseChanDeform *pdef_info_array;
   bPoseChanDeform *pdef_info = NULL;
