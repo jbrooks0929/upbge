@@ -40,6 +40,7 @@ struct bArmature;
 struct Bone;
 struct bPose;
 struct bConstraint;
+struct DerivedMesh;
 struct Object;
 class MT_Matrix4x4;
 class BL_BlenderSceneConverter;
@@ -91,6 +92,15 @@ class BL_ArmatureObject : public KX_GameObject {
   void BlendInPose(bPose *blend_pose, float weight, short mode);
 
   bool UpdateTimestep(double curtime);
+
+  void armature_deform_verts(Object *armOb,
+                             Object *target,
+                             DerivedMesh *dm,
+                             float (*vertexCos)[3],
+                             float (*defMats)[3][3],
+                             int numVerts,
+                             float (*prevCos)[3],
+                             const char *defgrp_name);
 
   Object *GetArmatureObject();
   Object *GetOrigArmatureObject();
