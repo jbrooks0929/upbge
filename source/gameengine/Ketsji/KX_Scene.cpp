@@ -726,13 +726,6 @@ void KX_Scene::RenderAfterCameraSetup(KX_Camera *cam,
 
   BKE_scene_graph_update_tagged(depsgraph, bmain);
 
-  
-
-  /* Update evaluated object obmat according to SceneGraph. */
-  for (KX_GameObject *gameobj : GetObjectList()) {
-    gameobj->TagForTransformUpdateEvaluated();
-  }
-
   for (std::vector<std::pair<BL_ArmatureObject *, Object *>>::iterator it =
            m_arm_meshToUpdate.begin();
        it != m_arm_meshToUpdate.end();
@@ -740,10 +733,15 @@ void KX_Scene::RenderAfterCameraSetup(KX_Camera *cam,
     BL_ArmatureObject *arm = it->first;
     Object *obmesh = it->second;
     Object *obmesh_eval = (Object *)DEG_get_evaluated_id(depsgraph, &obmesh->id);
+    arm->ApplyPose();
     arm->armature_deform_verts(arm->GetBlenderObject(), obmesh_eval);
   }
   m_arm_meshToUpdate.clear();
 
+  /* Update evaluated object obmat according to SceneGraph. */
+  for (KX_GameObject *gameobj : GetObjectList()) {
+    gameobj->TagForTransformUpdateEvaluated();
+  }
 
   engine->EndCountDepsgraphTime();
 
