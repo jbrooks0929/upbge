@@ -733,6 +733,7 @@ void KX_Scene::RenderAfterCameraSetup(KX_Camera *cam,
     BL_ArmatureObject *arm = it->first;
     Object *obmesh = it->second;
     Object *obmesh_eval = (Object *)DEG_get_evaluated_id(depsgraph, &obmesh->id);
+    arm->VerifyStorage((Mesh *)obmesh_eval->data);
     arm->ApplyPose();
     arm->armature_deform_verts(arm->GetBlenderObject(), obmesh_eval);
   }

@@ -534,8 +534,6 @@ void BL_ArmatureObject::armature_deform_verts(Object *armOb,
   float(*prevCos)[3] = nullptr;
   const char *defgrp_name = nullptr;
 
-  VerifyStorage(tarmesh);
-
   float(*vertexCos)[3] = (float(*)[3]) m_transverts.data();
 
   bPoseChanDeform *pdef_info_array;
