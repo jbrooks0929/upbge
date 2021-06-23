@@ -449,7 +449,6 @@ void DM_verttri_from_looptri(MVertTri *verttri,
                              int looptri_num);
 
 void DM_update_tessface_data(DerivedMesh *dm);
-void DM_generate_tangent_tessface_data(DerivedMesh *dm, bool generate);
 
 void DM_update_materials(DerivedMesh *dm, struct Object *ob);
 struct MLoopUV *DM_paint_uvlayer_active_get(DerivedMesh *dm, int mat_nr);
@@ -477,6 +476,7 @@ DerivedMesh *mesh_create_derived_physics(struct Depsgraph *depsgraph,
                                          float (*vertCos)[3],
                                          const CustomData_MeshMasks *dataMask);
 
+/* same as above but won't use render settings */
 struct Mesh *editbmesh_get_eval_cage(struct Depsgraph *depsgraph,
                                      struct Scene *scene,
                                      struct Object *,

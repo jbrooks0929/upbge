@@ -42,6 +42,7 @@
 #include "BLI_linklist.h"
 #include "BLI_math.h"
 #include "BLI_task.h"
+#include "BLI_task.hh"
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
 
@@ -617,7 +618,7 @@ void DM_update_tessface_data(DerivedMesh *dm)
      * poly, see tessellation code). So we pass the MFace's, and BKE_mesh_loops_to_tessdata will
      * use MFace->v4 index as quad test.
      */
-    BKE_mesh_loops_to_tessdata(fdata, ldata, mface, polyindex, loopindex, totface);
+    mesh_loops_to_tessdata(fdata, ldata, mface, polyindex, loopindex, totface);
 
     MEM_freeN(loopindex);
   }
@@ -626,70 +627,6 @@ void DM_update_tessface_data(DerivedMesh *dm)
     printf("%s: Updated tessellated customdata of dm %p\n", __func__, dm);
 
   dm->dirty &= ~DM_DIRTY_TESS_CDLAYERS;
-}
-
-void DM_generate_tangent_tessface_data(DerivedMesh *dm, bool generate)
-{
-  MFace *mf, *mface = dm->getTessFaceArray(dm);
-  MPoly *mp = dm->getPolyArray(dm);
-  MLoop *ml = dm->getLoopArray(dm);
-
-  CustomData *fdata = dm->getTessFaceDataLayout(dm);
-  CustomData *ldata = dm->getLoopDataLayout(dm);
-
-  const int totface = dm->getNumTessFaces(dm);
-  int mf_idx;
-
-  int *polyindex = (int *)CustomData_get_layer(fdata, CD_ORIGINDEX);
-  unsigned int(*loopindex)[4] = nullptr;
-
-  /* Should never occur, but better abort than segfault! */
-  if (!polyindex)
-    return;
-
-  if (generate) {
-    for (int j = 0; j < ldata->totlayer; j++) {
-      if (ldata->layers[j].type == CD_TANGENT) {
-        CustomData_add_layer_named(
-            fdata, CD_TANGENT, CD_CALLOC, nullptr, totface, ldata->layers[j].name);
-        CustomData_bmesh_update_active_layers(fdata, ldata);
-
-        if (!loopindex) {
-          loopindex = (unsigned int(*)[4])MEM_malloc_arrayN(totface, sizeof(*loopindex), __func__);
-          for (mf_idx = 0, mf = mface; mf_idx < totface; mf_idx++, mf++) {
-            const int mf_len = mf->v4 ? 4 : 3;
-            unsigned int *ml_idx = loopindex[mf_idx];
-
-            /* Find out loop indices. */
-            /* NOTE: This assumes tessface are valid and in sync with loop/poly... Else, most
-             * likely, segfault! */
-            for (int i = mp[polyindex[mf_idx]].loopstart, not_done = mf_len; not_done; i++) {
-              const int tf_v = BKE_MESH_TESSFACE_VINDEX_ORDER(mf, ml[i].v);
-              if (tf_v != -1) {
-                ml_idx[tf_v] = i;
-                not_done--;
-              }
-            }
-          }
-        }
-
-        /* NOTE: quad detection issue - fourth vertidx vs fourth loopidx:
-         * Here, our tfaces' fourth vertex index is never 0 for a quad. However, we know our fourth
-         * loop index may be 0 for quads (because our quads may have been rotated compared to their
-         * org poly, see tessellation code). So we pass the MFace's, and BKE_mesh_loops_to_tessdata
-         * will use MFace->v4 index as quad test.
-         */
-        BKE_mesh_tangent_loops_to_tessdata(
-            fdata, ldata, mface, polyindex, loopindex, totface, ldata->layers[j].name);
-      }
-    }
-    if (loopindex)
-      MEM_freeN(loopindex);
-    BLI_assert(CustomData_from_bmeshpoly_test(fdata, ldata, true));
-  }
-
-  if (G.debug & G_DEBUG)
-    printf("%s: Updated tessellated tangents of dm %p\n", __func__, dm);
 }
 
 void DM_update_materials(DerivedMesh *dm, Object *ob)
@@ -1382,7 +1319,7 @@ static Mesh *modifier_modify_mesh_and_geometry_set(ModifierData *md,
     /* Return an empty mesh instead of null.  */
     if (mesh_output == nullptr) {
       mesh_output = BKE_mesh_new_nomain(0, 0, 0, 0, 0);
-      BKE_mesh_copy_settings(mesh_output, input_mesh);
+      BKE_mesh_copy_parameters_for_eval(mesh_output, input_mesh);
     }
   }
 
@@ -1883,10 +1820,14 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
       BLI_assert(runtime->eval_mutex != nullptr);
       BLI_mutex_lock((ThreadMutex *)runtime->eval_mutex);
       if (runtime->mesh_eval == nullptr) {
-        mesh_final = BKE_mesh_copy_for_eval(mesh_input, true);
-        mesh_calc_modifier_final_normals(mesh_input, &final_datamask, sculpt_dyntopo, mesh_final);
-        mesh_calc_finalize(mesh_input, mesh_final);
-        runtime->mesh_eval = mesh_final;
+        /* Isolate since computing normals is multithreaded and we are holding a lock. */
+        blender::threading::isolate_task([&] {
+          mesh_final = BKE_mesh_copy_for_eval(mesh_input, true);
+          mesh_calc_modifier_final_normals(
+              mesh_input, &final_datamask, sculpt_dyntopo, mesh_final);
+          mesh_calc_finalize(mesh_input, mesh_final);
+          runtime->mesh_eval = mesh_final;
+        });
       }
       BLI_mutex_unlock((ThreadMutex *)runtime->eval_mutex);
     }
@@ -2027,7 +1968,7 @@ static void editbmesh_calc_modifier_final_normals(Mesh *mesh_final,
   /* BMESH_ONLY, ensure tessface's used for drawing,
    * but don't recalculate if the last modifier in the stack gives us tessfaces
    * check if the derived meshes are DM_TYPE_EDITBMESH before calling, this isn't essential
-   * but quiets annoying error messages since tessfaces wont be created. */
+   * but quiets annoying error messages since tessfaces won't be created. */
   if (final_datamask->fmask & CD_MASK_MFACE) {
     if (mesh_final->edit_mesh == nullptr) {
       BKE_mesh_tessface_ensure(mesh_final);
