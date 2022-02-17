@@ -469,37 +469,35 @@ void KX_Scene::ResetLastReplicatedParentObject()
 void KX_Scene::ReinitBlenderContextVariables()
 {
   ARegion *ar;
-  wmWindow *win;
   bContext *C = KX_GetActiveEngine()->GetContext();
   wmWindowManager *wm = CTX_wm_manager(C);
-  for (win = (wmWindow *)wm->windows.first; win; win = win->next) {
-    bScreen *screen = WM_window_get_active_screen(win);
-    if (!screen) {
-      continue;
-    }
+  wmWindow *win = (wmWindow *)wm->windows.first;
+  bScreen *screen = WM_window_get_active_screen(win);
+  if (!screen) {
+      return;
+  }
 
-    for (ScrArea *sa = (ScrArea *)screen->areabase.first; sa; sa = sa->next) {
-      /* We choose the biggest ScrArea to match the behaviour in WM_init_game */
-      if (sa->spacetype == SPACE_VIEW3D &&
-          sa == BKE_screen_find_big_area(screen, SPACE_VIEW3D, 0)) {
-        ListBase *regionbase = &sa->regionbase;
-        for (ar = (ARegion *)regionbase->first; ar; ar = ar->next) {
-          if (ar->regiontype == RGN_TYPE_WINDOW) {
-            if (ar->regiondata) {
-              CTX_wm_window_set(C, win);
-              CTX_wm_screen_set(C, screen);
-              CTX_wm_area_set(C, sa);
-              CTX_wm_region_set(C, ar);
-              CTX_data_scene_set(C, GetBlenderScene());
-              SpaceType *st;
-              ARegionType *art;
-              st = BKE_spacetype_from_id(SPACE_VIEW3D);
-              art = BKE_regiontype_from_id(st, RGN_TYPE_WINDOW);
-              ar->type = art;
-              ar->regiontype = RGN_TYPE_WINDOW;
-              win->scene = GetBlenderScene();
-              return;
-            }
+  for (ScrArea *sa = (ScrArea *)screen->areabase.first; sa; sa = sa->next) {
+    /* We choose the biggest ScrArea to match the behaviour in WM_init_game */
+    if (sa->spacetype == SPACE_VIEW3D &&
+        sa == BKE_screen_find_big_area(screen, SPACE_VIEW3D, 0)) {
+      ListBase *regionbase = &sa->regionbase;
+      for (ar = (ARegion *)regionbase->first; ar; ar = ar->next) {
+        if (ar->regiontype == RGN_TYPE_WINDOW) {
+          if (ar->regiondata) {
+            CTX_wm_window_set(C, win);
+            CTX_wm_screen_set(C, screen);
+            CTX_wm_area_set(C, sa);
+            CTX_wm_region_set(C, ar);
+            CTX_data_scene_set(C, GetBlenderScene());
+            SpaceType *st;
+            ARegionType *art;
+            st = BKE_spacetype_from_id(SPACE_VIEW3D);
+            art = BKE_regiontype_from_id(st, RGN_TYPE_WINDOW);
+            ar->type = art;
+            ar->regiontype = RGN_TYPE_WINDOW;
+            win->scene = GetBlenderScene();
+            return;
           }
         }
       }

@@ -1477,6 +1477,11 @@ static int game_engine_exec(bContext *C, wmOperator *op)
   RegionView3D *rv3d;
   rcti cam_frame;
 
+  if (!prevwin || prevwin && (prevwin != CTX_wm_manager(C)->windows.first)) {
+    BKE_report(op->reports, RPT_ERROR, "Game engine must be started from main window");
+    return OPERATOR_CANCELLED;
+  }
+
   UNUSED_VARS(op);
 
   /* Redraw 1 time before context switch (switch to view3d)

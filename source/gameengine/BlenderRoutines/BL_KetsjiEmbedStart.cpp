@@ -88,26 +88,25 @@ static BlendFileData *load_game_data(const char *filename)
 static void InitBlenderContextVariables(bContext *C, wmWindowManager *wm, Scene *scene)
 {
   ARegion *ar;
-  wmWindow *win;
-  for (win = (wmWindow *)wm->windows.first; win; win = win->next) {
-    bScreen *screen = WM_window_get_active_screen(win);
-    if (!screen) {
-      continue;
-    }
+  wmWindow *win = (wmWindow *)wm->windows.first;
+  bScreen *screen = WM_window_get_active_screen(win);
+  if (!screen) {
+    std::cout << "InitBlenderContextVariables: No bScreen found. tmp(Crash)" << std::endl;
+    return;
+  }
 
-    for (ScrArea *sa = (ScrArea *)screen->areabase.first; sa; sa = sa->next) {
-      if (sa->spacetype == SPACE_VIEW3D) {
-        ListBase *regionbase = &sa->regionbase;
-        for (ar = (ARegion *)regionbase->first; ar; ar = ar->next) {
-          if (ar->regiontype == RGN_TYPE_WINDOW) {
-            if (ar->regiondata) {
-              CTX_wm_screen_set(C, screen);
-              CTX_wm_area_set(C, sa);
-              CTX_wm_region_set(C, ar);
-              CTX_data_scene_set(C, scene);
-              win->scene = scene;
-              return;
-            }
+  for (ScrArea *sa = (ScrArea *)screen->areabase.first; sa; sa = sa->next) {
+    if (sa->spacetype == SPACE_VIEW3D) {
+      ListBase *regionbase = &sa->regionbase;
+      for (ar = (ARegion *)regionbase->first; ar; ar = ar->next) {
+        if (ar->regiontype == RGN_TYPE_WINDOW) {
+          if (ar->regiondata) {
+            CTX_wm_screen_set(C, screen);
+            CTX_wm_area_set(C, sa);
+            CTX_wm_region_set(C, ar);
+            CTX_data_scene_set(C, scene);
+            win->scene = scene;
+            return;
           }
         }
       }
