@@ -48,6 +48,7 @@ static Main *bpy_import_main = NULL;
 static ListBase bpy_import_main_list;
 
 static PyMethodDef bpy_import_meth;
+static PyObject *bpy_import_meth_orig = NULL;
 
 /* 'builtins' is most likely PyEval_GetBuiltins() */
 
@@ -66,7 +67,8 @@ static PyMethodDef bpy_import_meth;
 void bpy_import_init(PyObject *builtins)
 {
   PyObject *item;
-
+  bpy_import_meth_orig = PyDict_GetItemString(builtins, "__import__");
+  Py_IncRef(bpy_import_meth_orig);
   PyDict_SetItemString(builtins, "__import__", item = PyCFunction_New(&bpy_import_meth, NULL));
   Py_DECREF(item);
 }
@@ -87,6 +89,12 @@ struct Main *bpy_import_main_get(void)
 void bpy_import_main_set(struct Main *maggie)
 {
   bpy_import_main = maggie;
+  if (maggie == NULL) {
+    /* Restore original bpy import method (not custom bge one) */
+    PyDict_SetItemString(PyEval_GetBuiltins(), "__import__", bpy_import_meth_orig);
+    Py_DECREF(bpy_import_meth_orig);
+    bpy_import_meth_orig = NULL;
+  }
 }
 
 void bpy_import_main_extra_add(struct Main *maggie)
