@@ -185,6 +185,8 @@ bool CleanPairCallback::processOverlap(btBroadphasePair &pair)
   return false;
 }
 
+static Mesh *me_eval_backup = nullptr;
+
 CcdPhysicsController::CcdPhysicsController(const CcdConstructionInfo &ci) : m_cci(ci)
 {
   m_prototypeTransformInitialized = false;
@@ -745,6 +747,8 @@ CcdPhysicsController::~CcdPhysicsController()
   delete m_object;
 
   DeleteControllerShape();
+
+  me_eval_backup = nullptr;
 
   if (m_shapeInfo) {
     m_shapeInfo->Release();
@@ -1869,6 +1873,20 @@ bool CcdPhysicsController::ReinstancePhysicsShape(KX_GameObject *from_gameobj,
   if (!from_gameobj && !from_meshobj)
     from_gameobj = KX_GameObject::GetClientObject((KX_ClientObjectInfo *)GetNewClientInfo());
 
+  if (evaluatedMesh) {
+    /* Avoid not needed update when shape in reinstanced from rendered shape */
+    /* There could be an exceptional case where ob_eval is modified in logic step maybe
+     * which can be problematic - could be workarounded with an optional arg in reinstanPhysicsMesh API
+     * adding optimize = True for example */
+    bContext *C = KX_GetActiveEngine()->GetContext();
+    Depsgraph *depsgraph = CTX_data_depsgraph_on_load(C);
+    Object *ob_eval = DEG_get_evaluated_object(depsgraph, from_gameobj->GetBlenderObject());
+    Mesh *me = (Mesh *)ob_eval->data;
+    if (me == me_eval_backup) {
+      return false;
+    }
+  }
+
   if (dupli && (m_shapeInfo->GetRefCount() > 1)) {
     CcdShapeConstructionInfo *newShapeInfo = m_shapeInfo->GetReplica();
     m_shapeInfo->Release();
@@ -2399,6 +2417,7 @@ bool CcdShapeConstructionInfo::UpdateMesh(class KX_GameObject *from_gameobj,
     Depsgraph *depsgraph = CTX_data_depsgraph_on_load(C);
     Object *ob_eval = DEG_get_evaluated_object(depsgraph, from_gameobj->GetBlenderObject());
     me = (Mesh *)ob_eval->data;
+    me_eval_backup = me;
   }
   else if (from_gameobj && !evaluatedMesh) {
     me = (Mesh *)from_gameobj->GetBlenderObject()->data;
